@@ -1,54 +1,70 @@
-seed: "AUTO"          # "AUTO" uses time-based seed. You can set a string for reproducibility.
+seed: "AUTO"
 out: "out.mp4"
 
 video:
-  width: 1280
-  height: 720
-  fps: 30
+  width: 960
+  height: 540
+  fps: 24
   duration_s: 30
+
+encode:
+  crf: 26
+  preset: "veryfast"
+  audio_bitrate: "128k"
 
 chapters:
   - name: "WARNING"
     seconds: 3
   - name: "TECHNICAL NOTES"
     seconds: 3
-  - name: "CHAPTER 1: SIGNAL ACQUISITION"
-    seconds: 8
-  - name: "CHAPTER 2: CONTENT DRIFT"
-    seconds: 8
-  - name: "CHAPTER 3: LOSS EVENT"
-    seconds: 8
+  - name: "ROOM: FOYER"
+    seconds: 6
+  - name: "ROOM: LIVING ROOM"
+    seconds: 6
+  - name: "ROOM: KITCHEN"
+    seconds: 6
+  - name: "ROOM: BEDROOM"
+    seconds: 6
+  - name: "ROOM: BASEMENT"
+    seconds: 6
 
 scrape:
-  max_wiki_paragraphs: 6
-  max_images: 8
-  image_min_width: 900
+  max_wiki_paragraphs: 8
+  max_images: 10
   wikipedia_lang: "en"
   allow_wikimedia: true
+  commons_search_fallback: true
 
 style:
   black_white: true
   vhs_strength: 0.85
-  jitter_strength: 0.7
-  dropout_strength: 0.6
+  jitter_strength: 0.75
+  dropout_strength: 0.65
   chroma_shift: 1
   scanlines: 1
-  film_flicker: 0.45
-  pframe_smear: 0.65
+  film_flicker: 0.5
+  pframe_smear: 0.7
 
 jumpscares:
-  probability_per_second: 0.12
+  probability_per_second: 0.16
   flash_frames: 2
-  hold_frames: 6
-  max_events: 6
+  hold_frames: 7
+  max_events: 7
 
 overlay:
   location_pool:
-    - "BRESCIA IT"
-    - "MILANO IT"
-    - "CREMONA IT"
-    - "VERONA IT"
-    - "PARMA IT"
+    - "KANSAS UTC"
+    - "ZEVRED"
+    - "MIAMI USBC"
+    - "CHICAGO UTC"
+    - "SELENE MXC"
     - "UNKNOWN SECTOR"
     - "FIELD UNIT 7"
   tape_id_prefix: "TAPE"
+  camera_pool:
+    - "CAM-1"
+    - "CAM-2"
+    - "HANDHELD"
+    - "DOORWAY"
+    - "HALL FEED"
+
