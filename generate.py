@@ -1,6 +1,3 @@
-
----
-
 ## 4) `generate.py`
 
 ```python
