@@ -4,18 +4,26 @@ import random
 
 
 KEYWORDS = [
-    "signal", "archive", "broadcast", "instruction", "warning",
-    "obsolete", "contamination", "frequency", "recovery", "anomaly",
-    "protocol", "inspection", "calibration", "incident", "unmarked",
-    "dust", "static", "relay", "terminal", "threshold"
+    "contamination", "signal", "archive", "broadcast", "protocol",
+    "interference", "recovery", "anomaly", "inspection", "calibration",
+    "threshold", "relay", "obsolete", "missing", "static", "corrosion",
+    "artifact", "drift", "leak", "witness"
 ]
 
 TOPICS = [
-    "numbers station", "fog", "abandoned facility", "medical pamphlet",
-    "railway bulletin", "civil defense", "field report", "weather radar",
-    "missing person notice", "equipment manual", "interference pattern",
-    "photographic plate", "floodlight survey", "underground corridor",
-    "shortwave logbook"
+    "missing person notice", "civil defense bulletin", "equipment manual",
+    "field report", "weather radar", "numbers station", "railway memo",
+    "medical pamphlet", "inspection log", "frequency chart", "site map",
+    "photographic plate", "incident summary"
+]
+
+ROOMS = [
+    ("FOYER", "entry camera / door seam"),
+    ("LIVING ROOM", "wide angle / low light"),
+    ("KITCHEN", "fluorescent hum / tile reflections"),
+    ("BEDROOM", "soft shadows / cloth movement"),
+    ("BASEMENT", "low ceiling / damp walls"),
+    ("ATTIC", "wood dust / insulation fibers"),
 ]
 
 
@@ -26,14 +34,27 @@ def _stable_int(s: str) -> int:
 
 def make_seed_and_theme(seed_cfg: str):
     if seed_cfg == "AUTO":
-        # time-based but still printed for reproducibility
         seed_cfg = str(int(time.time()))
     seed = seed_cfg
     rng = random.Random(_stable_int(seed))
 
-    kw = rng.choice(KEYWORDS)
+    # “brain keyword” that drives everything
+    brain = rng.choice(KEYWORDS)
     topic = rng.choice(TOPICS)
 
-    # A “coherence anchor” phrase that will drive scraping + on-screen copy
-    anchor = f"{kw} {topic}"
-    return seed, {"keyword": kw, "topic": topic, "anchor": anchor, "rng_int": _stable_int(seed)}
+    # Cohesion anchor for scraping & on-screen language
+    anchor = f"{brain} {topic}"
+
+    # Stable room ordering but still “tape-like”
+    rooms = ROOMS.copy()
+    rng.shuffle(rooms)
+
+    return seed, {
+        "brain": brain,
+        "keyword": brain,      # backward compatible
+        "topic": topic,
+        "anchor": anchor,
+        "rooms": rooms,        # list of (room_name, room_note)
+        "rng_int": _stable_int(seed),
+    }
+
