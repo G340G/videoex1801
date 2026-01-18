@@ -1,0 +1,54 @@
+seed: "AUTO"          # "AUTO" uses time-based seed. You can set a string for reproducibility.
+out: "out.mp4"
+
+video:
+  width: 1280
+  height: 720
+  fps: 30
+  duration_s: 30
+
+chapters:
+  - name: "WARNING"
+    seconds: 3
+  - name: "TECHNICAL NOTES"
+    seconds: 3
+  - name: "CHAPTER 1: SIGNAL ACQUISITION"
+    seconds: 8
+  - name: "CHAPTER 2: CONTENT DRIFT"
+    seconds: 8
+  - name: "CHAPTER 3: LOSS EVENT"
+    seconds: 8
+
+scrape:
+  max_wiki_paragraphs: 6
+  max_images: 8
+  image_min_width: 900
+  wikipedia_lang: "en"
+  allow_wikimedia: true
+
+style:
+  black_white: true
+  vhs_strength: 0.85
+  jitter_strength: 0.7
+  dropout_strength: 0.6
+  chroma_shift: 1
+  scanlines: 1
+  film_flicker: 0.45
+  pframe_smear: 0.65
+
+jumpscares:
+  probability_per_second: 0.12
+  flash_frames: 2
+  hold_frames: 6
+  max_events: 6
+
+overlay:
+  location_pool:
+    - "BRESCIA IT"
+    - "MILANO IT"
+    - "CREMONA IT"
+    - "VERONA IT"
+    - "PARMA IT"
+    - "UNKNOWN SECTOR"
+    - "FIELD UNIT 7"
+  tape_id_prefix: "TAPE"
