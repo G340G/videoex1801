@@ -9,9 +9,7 @@ import requests
 WIKI_API = "https://{lang}.wikipedia.org/w/api.php"
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 
-# Wikimedia recommends identifying your application with a clear UA.
-# In GitHub Actions, a missing/weak UA often yields 403.
-DEFAULT_UA = "videoex1801-vhs-arg-generator/1.0 (GitHub Actions; contact: none)"
+DEFAULT_UA = "videoex1801-vhs-arg-generator/1.1 (GitHub Actions; contact: none)"
 
 
 def _session():
@@ -51,6 +49,7 @@ def wiki_extract(lang: str, title: str) -> str:
         "explaintext": 1,
         "titles": title,
         "format": "json",
+        "exsectionformat": "plain",
     }, timeout=30)
     r.raise_for_status()
     pages = r.json().get("query", {}).get("pages", {})
@@ -60,50 +59,32 @@ def wiki_extract(lang: str, title: str) -> str:
     return page.get("extract", "") or ""
 
 
-def wiki_images(lang: str, title: str, thumb_width: int = 1200, max_images: int = 8) -> List[str]:
+def commons_search_image_urls(query: str, thumb_width: int = 1400, limit: int = 12) -> List[str]:
+    """
+    Search Wikimedia Commons directly (more reliable than page-embedded images).
+    """
     s = _session()
-    # 1) get images list for page
-    r = s.get(WIKI_API.format(lang=lang), params={
+    r = s.get(COMMONS_API, params={
         "action": "query",
-        "titles": title,
-        "prop": "images",
+        "generator": "search",
+        "gsrsearch": query,
+        "gsrlimit": limit,
+        "gsrnamespace": 6,   # File:
+        "prop": "imageinfo",
+        "iiprop": "url",
+        "iiurlwidth": thumb_width,
         "format": "json",
-        "imlimit": 50,
     }, timeout=30)
     r.raise_for_status()
-    pages = r.json().get("query", {}).get("pages", {})
-    if not pages:
-        return []
-    page = next(iter(pages.values()))
-    imgs = [
-        x["title"] for x in page.get("images", [])
-        if x.get("title", "").lower().endswith((".jpg", ".jpeg", ".png"))
-    ]
-
-    # 2) fetch imageinfo from commons for thumbnails
+    pages = (r.json().get("query", {}) or {}).get("pages", {}) or {}
     urls = []
-    for name in imgs[: max_images * 3]:
-        rr = s.get(COMMONS_API, params={
-            "action": "query",
-            "titles": name,
-            "prop": "imageinfo",
-            "iiprop": "url",
-            "iiurlwidth": thumb_width,
-            "format": "json",
-        }, timeout=30)
-        rr.raise_for_status()
-        pdata = rr.json().get("query", {}).get("pages", {})
-        if not pdata:
-            continue
-        p = next(iter(pdata.values()))
+    for _, p in pages.items():
         ii = (p.get("imageinfo") or [])
         if not ii:
             continue
-        thumb = ii[0].get("thumburl") or ii[0].get("url")
-        if thumb:
-            urls.append(thumb)
-        if len(urls) >= max_images:
-            break
+        u = ii[0].get("thumburl") or ii[0].get("url")
+        if u and any(u.lower().endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp"]):
+            urls.append(u)
     return urls
 
 
@@ -120,34 +101,30 @@ def download_image(url: str, out_path: Path) -> bool:
 
 def pick_paragraphs(extract: str, max_paragraphs: int) -> List[str]:
     parts = [p.strip() for p in extract.split("\n") if p.strip()]
-    parts = [p for p in parts if len(p) > 80]
+    # keep paragraphs with some substance
+    parts = [p for p in parts if len(p) > 90]
     return [_safe_text(p) for p in parts[:max_paragraphs]]
 
 
 def scrape_bundle(cfg: dict, theme: dict, workdir: Path) -> Dict:
-    """
-    Scrape bundle is best-effort:
-    - If Wikipedia blocks (403) or any network error happens, we fall back to a local bundle.
-    - This keeps the generator reliable in CI.
-    """
     rng = random.Random(theme["rng_int"])
     lang = cfg["scrape"].get("wikipedia_lang", "en")
     anchor = theme["anchor"]
+    brain = theme["brain"]
 
-    # --- fallback local pack (keeps video coherent even offline/blocked)
     fallback_titles = ["Shortwave radio", "Noise (electronics)", "Numbers station"]
     fallback_paras = [
-        "A weak carrier tone persists beneath broadband noise. Interference fluctuates with time, distance, and equipment condition. "
-        "Signal artifacts repeat in patterns that resemble synchronization attempts.",
-        "Recorded material may exhibit dropouts, tracking errors, and temporal smearing. These distortions can resemble intentional edits, "
-        "even when caused by damaged tape or unstable playback.",
-        "When documentation is incomplete, interpretation drifts. The record remains technically consistent while meaning becomes uncertain."
+        "A weak carrier tone persists beneath broadband noise. Interference fluctuates with time, distance, and equipment condition.",
+        "Recorded material may exhibit dropouts, tracking errors, and temporal smearing that resemble intentional edits.",
+        "When documentation is incomplete, interpretation drifts. The record remains technically consistent while meaning becomes uncertain.",
+        "Field notes indicate repeated patterns at irregular intervals. The source remains unverified.",
     ]
 
+    # Titles
     try:
-        titles = wiki_search(lang, anchor, limit=8)
+        titles = wiki_search(lang, anchor, limit=10)
         if not titles:
-            titles = wiki_search(lang, theme["keyword"], limit=8)
+            titles = wiki_search(lang, brain, limit=10)
         if not titles:
             titles = fallback_titles
     except Exception:
@@ -163,47 +140,60 @@ def scrape_bundle(cfg: dict, theme: dict, workdir: Path) -> Dict:
     img_dir = workdir / "imgs"
     img_dir.mkdir(parents=True, exist_ok=True)
 
+    # Text
     for t in picked:
         try:
             ex = wiki_extract(lang, t)
-            paras.extend(pick_paragraphs(ex, cfg["scrape"].get("max_wiki_paragraphs", 6)))
+            paras.extend(pick_paragraphs(ex, cfg["scrape"].get("max_wiki_paragraphs", 8)))
         except Exception:
-            # continue collecting from other titles
             pass
-
-        if cfg["scrape"].get("allow_wikimedia", True):
-            try:
-                urls = wiki_images(
-                    lang, t,
-                    thumb_width=1400,
-                    max_images=cfg["scrape"].get("max_images", 8)
-                )
-                rng.shuffle(urls)
-                for u in urls:
-                    if len(image_paths) >= cfg["scrape"].get("max_images", 8):
-                        break
-                    outp = img_dir / f"img_{len(image_paths):02d}.jpg"
-                    if download_image(u, outp):
-                        image_paths.append(str(outp))
-                        image_urls.append(u)
-            except Exception:
-                pass
 
     if not paras:
         paras = fallback_paras
 
-    # creepy technical metadata lines (seeded)
+    # Images: Commons direct search (anchor + brain) so we actually get something
+    urls = []
+    if cfg["scrape"].get("allow_wikimedia", True) and cfg["scrape"].get("commons_search_fallback", True):
+        try:
+            urls.extend(commons_search_image_urls(anchor, limit=12))
+        except Exception:
+            pass
+        try:
+            urls.extend(commons_search_image_urls(brain, limit=12))
+        except Exception:
+            pass
+
+    # dedupe
+    seen = set()
+    urls2 = []
+    for u in urls:
+        if u in seen:
+            continue
+        seen.add(u)
+        urls2.append(u)
+
+    rng.shuffle(urls2)
+    max_images = int(cfg["scrape"].get("max_images", 10))
+    for u in urls2[:max_images]:
+        outp = img_dir / f"img_{len(image_paths):02d}.jpg"
+        if download_image(u, outp):
+            image_paths.append(str(outp))
+            image_urls.append(u)
+
     tech = []
-    for _ in range(12):
+    for _ in range(16):
         code = rng.randint(100, 999)
         hz = rng.randint(2000, 18000)
-        tech.append(f"{theme['keyword'].upper()}-{code} / CARRIER {hz}Hz / CHECKSUM {rng.randint(100000, 999999)}")
+        tech.append(f"{brain.upper()}-{code} / CARRIER {hz}Hz / CRC {rng.randint(100000, 999999)}")
 
     return {
         "titles": picked,
-        "paragraphs": paras[: cfg["scrape"].get("max_wiki_paragraphs", 6)],
+        "paragraphs": paras[: int(cfg["scrape"].get("max_wiki_paragraphs", 8))],
         "images": image_paths,
         "image_urls": image_urls,
         "tech_lines": tech,
+        "brain": brain,
+        "anchor": anchor,
     }
+
 
